@@ -58,7 +58,7 @@ Deno.serve(async(req)=>{
  if(!/\.pdf$/i.test(name) && !/\.pdf$/i.test(meta(stream,'dc.source'))) { const format=await official(stream._links.format.href);if(format.mimetype!=='application/pdf')continue; }
  const description=meta(stream,'dc.description');
  const norm=clean(name+' '+description);
- const category=/consolidad|compilad/.test(norm)?'compilacao':/texto principal|original/.test(norm)?'original':/anexo/.test(norm)?'anexo':'nao_classificado';
+ const category=/consolidad|compilad/.test(norm)?'compilacao':/anexo/.test(norm)?'anexo':'original';
  itemFiles.push({fonte_uuid:i.uuid,url:source+'/server/api/core/bitstreams/'+stream.uuid+'/content',nome:name,categoria:category,descricao:description||null,ordem:itemFiles.length});
  }
  }
