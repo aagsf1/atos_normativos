@@ -29,3 +29,14 @@ Os arquivos SQL são scripts de instalação revisáveis, sem credenciais; não 
 A tabela `trt16_arquivos` vincula múltiplos PDFs a um ato, preservando URL direta por bitstream, nome, categoria, descrição, data da versão quando confirmada, ordem e data de coleta. A pesquisa devolve todos os arquivos. Não se presume que a última compilação esteja vigente. A categoria só deve ser atribuída com evidência nos metadados ou no documento; os dois PDFs da amostra ficam como não classificados.
 
 Exemplo verificado na biblioteca: Portaria 106/2026, registro https://bibliotecadigital.trt16.jus.br/entities/publication/624c9d7d-605a-44b5-9c54-68a9b33bb32c/full, possui Texto Principal.pdf e Texto Consolidado.pdf. O segundo informa compilação da alteração pela Portaria 188/2026. Esse ato não foi adicionado à amostra porque seus dois endereços diretos ainda não foram coletados.
+
+
+## Coleta automática instalada
+
+O projeto atos_normativos executa a função trt16-sync com JWT obrigatório e token privado do Vault. O agendador inicia ciclos às 06:00 UTC (03:00 em Brasília) e processa lotes de 25 atos a cada minuto. A primeira carga está em andamento: Portarias e Resoluções de 2026, seguidas dos anos anteriores até 1989. Se um ciclo ainda estiver em andamento no horário diário, continua do ponto salvo. Após cinco falhas consecutivas, interrompe o ciclo e tenta novamente no próximo horário diário.
+
+A fonte é a API DSpace oficial. Ementas e autoria são copiadas do catálogo; todos os PDFs do pacote ORIGINAL são relacionados usando /server/api/core/bitstreams/{UUID}/content. O campo pdf_url mantém o principal, enquanto trt16_arquivos conserva os arquivos relacionados. Não são feitas cópias dos PDFs.
+
+Base de Pesquisa apresenta contagem atual e data da última gravação bem-sucedida, no horário de Brasília. A conclusão de um ciclo completo é registrada separadamente. Os registros anteriormente importados são preservados quando a fonte fica indisponível; a coleta não remove automaticamente atos que saíram do catálogo.
+
+Os scripts sync.sql e sync.ts documentam a automação deste projeto. Para reinstalar em outro projeto, revisar a URL fixa em sync.sql, registrar a chave anon JWT em vault.trt16_sync_anon_jwt e configurar a função com verify_jwt=true. Nunca publicar o token privado ou a chave service_role.
