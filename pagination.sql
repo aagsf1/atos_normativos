@@ -14,7 +14,7 @@ returns jsonb language sql stable security invoker set search_path = '' as $$
  select to_tsquery('simple',string_agg('('||expressao||')',' & ' order by ordem)) as consulta from consultas_grupo
  ), filtrados as (
  select a.* from public.trt16_atos a cross join termos t
- where a.em_escopo and (t.consulta is null or to_tsvector('simple',regexp_replace(a.campo_busca,'[^[:alnum:]_]+',' ','g')) @@ t.consulta)
+ where a.em_escopo and (t.consulta is null or to_tsvector('simple',regexp_replace(a.campo_busca,'[^[:alnum:]_]+',' ','g')) @@ t.consulta or exists(select 1 from public.trt16_arquivos f where f.ato_id=a.id and f.texto_estado='concluido' and to_tsvector('simple',regexp_replace(a.campo_busca,'[^[:alnum:]_]+',' ','g')||' '||coalesce(f.texto_busca,'')) @@ t.consulta))
  and (tipo_filtro='' or a.tipo=tipo_filtro)
  and (ano_filtro is null or a.ano=ano_filtro)
  and (numero_filtro is null or a.numero=numero_filtro)
@@ -24,9 +24,11 @@ returns jsonb language sql stable security invoker set search_path = '' as $$
  select tamanho,greatest(1,least(greatest(1,coalesce(pagina_num,1)),greatest(1,ceil(n::numeric/tamanho)::int))) as atual,greatest(1,ceil(n::numeric/tamanho)::int) as paginas from limites cross join contagem
  ), pagina as (select * from filtrados order by ano desc,numero desc limit (select tamanho from paginacao) offset (select (atual-1)*tamanho from paginacao))
  select jsonb_build_object(
- 'resultados',coalesce((select jsonb_agg((to_jsonb(p)-'campo_busca') || jsonb_build_object('arquivos',coalesce((select jsonb_agg(to_jsonb(f) order by f.ordem,f.id) from public.trt16_arquivos f where f.ato_id=p.id),'[]'::jsonb)) order by ano desc,numero desc) from pagina p),'[]'::jsonb),
+ 'resultados',coalesce((select jsonb_agg((to_jsonb(p)-'campo_busca') || jsonb_build_object('arquivos',coalesce((select jsonb_agg((to_jsonb(f)-'texto_pdf'-'texto_busca'-'texto_lease'-'texto_erro'-'texto_proxima'-'texto_tentativas') || jsonb_build_object('encontrado_no_pdf',exists(select 1 from termos t where t.consulta is not null and f.texto_estado='concluido' and to_tsvector('simple',f.texto_busca) @@ t.consulta)) order by f.ordem,f.id) from public.trt16_arquivos f where f.ato_id=p.id),'[]'::jsonb)) order by ano desc,numero desc) from pagina p),'[]'::jsonb),
  'encontrados',(select count(*) from filtrados),
  'pagina',(select atual from paginacao),'paginas',(select paginas from paginacao),'tamanho_pagina',(select tamanho from paginacao),
+ 'pdfs_indexados',(select count(*) from public.trt16_arquivos f join public.trt16_atos a on a.id=f.ato_id where a.em_escopo and f.texto_estado='concluido'),
+ 'pdfs_total',(select count(*) from public.trt16_arquivos f join public.trt16_atos a on a.id=f.ato_id where a.em_escopo),
  'total',(select count(*) from public.trt16_atos where em_escopo),
  'base',(select to_jsonb(b)-'id' from public.trt16_base b where id=1),
  'anos',coalesce((select jsonb_agg(ano order by ano desc) from (select distinct ano from public.trt16_atos where em_escopo) y),'[]'::jsonb))
