@@ -40,3 +40,10 @@ A fonte é a API DSpace oficial. Ementas e autoria são copiadas do catálogo; t
 Base de Pesquisa apresenta contagem atual e data da última gravação bem-sucedida, no horário de Brasília. A conclusão de um ciclo completo é registrada separadamente. Os registros anteriormente importados são preservados quando a fonte fica indisponível; a coleta não remove automaticamente atos que saíram do catálogo.
 
 Os scripts sync.sql e sync.ts documentam a automação deste projeto. Para reinstalar em outro projeto, revisar a URL fixa em sync.sql, registrar a chave anon JWT em vault.trt16_sync_anon_jwt e configurar a função com verify_jwt=true. Nunca publicar o token privado ou a chave service_role.
+
+
+## Pesquisa no conteúdo dos PDFs
+
+Instalar `pdf-text.sql`, publicar `pdf-text.ts` como Edge Function `trt16-pdf` com verificação JWT e reaplicar `pagination.sql`. O worker usa o mesmo token privado no Vault da coleta e só pode gravar com `service_role`. A cada minuto extrai um PDF pendente, em ordem decrescente de ano e número. A fila permanece ativa durante e depois da coleta, incluindo novos arquivos automaticamente; erros são repetidos até cinco tentativas. URLs oficiais são preservadas. O texto é armazenado no banco, sem hospedar cópia dos PDFs.
+
+A pesquisa combina metadados com o texto de cada PDF individualmente e aceita E/OU. A resposta pública não inclui textos completos nem campos internos da fila. A página informa quantos PDFs já foram indexados. Arquivos sem texto suficiente são marcados `ocr_pendente`: OCR ainda exige um worker próprio de processamento de imagens, não é executado pela Edge Function. Limite atual por arquivo: 15 MB. PDFs maiores e inacessíveis aparecem como erro de extração, sem interromper a importação de atos.
