@@ -35,8 +35,8 @@ Deno.serve(async(req)=>{
  if(!search?.page)throw new Error('Invalid discovery response');
  const items=(search._embedded?.objects||[]).map((o:any)=>o._embedded?.indexableObject).filter(Boolean);
  const ids=items.map((i:any)=>i.uuid).join(',');
- const existing=ids?await db('trt16_atos?select=fonte_uuid,fonte_modificado&fonte_uuid=in.('+ids+')'):[];
- const known=new Map(existing.map((i:any)=>[i.fonte_uuid,i.fonte_modificado]));
+ const existing=ids?await db('trt16_atos?select=fonte_uuid,fonte_modificado,trt16_arquivos(id)&fonte_uuid=in.('+ids+')'):[];
+ const known=new Map(existing.map((i:any)=>[i.fonte_uuid,{modified:i.fonte_modificado,files:i.trt16_arquivos?.length||0}]));
  const atos:any[]=[],files:any[]=[];let ignored=0;
  let cursor=0;
  async function work(){while(cursor<items.length){const i=items[cursor++];
@@ -45,7 +45,7 @@ Deno.serve(async(req)=>{
  const number=Number(meta(i,'local.identifier.number')||match?.[1]);
  const year=Number(meta(i,'local.identifier.year')||match?.[2]);
  if(!number||year!==claim.ano||i.withdrawn){ignored++;continue;}
- if(known.get(i.uuid)===i.lastModified)continue;
+ const previous:any=known.get(i.uuid); if(previous?.modified===i.lastModified && previous.files>0)continue;
  const abstract=meta(i,'dc.description.abstract')||meta(i,'dc.description')||'Ementa não informada no catálogo oficial.';
  const author=meta(i,'dc.contributor.author')||null;
  const issued=meta(i,'dc.date.issued').slice(0,10);
