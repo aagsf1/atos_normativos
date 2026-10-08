@@ -55,7 +55,7 @@ Deno.serve(async(req)=>{
  const streams=await list(bundle._links.bitstreams.href+'?size=100','bitstreams');
  for(const stream of streams){
  const name=stream.name||meta(stream,'dc.title')||'Documento PDF';
- if(!/\.pdf$/i.test(name))continue;
+ if(!/\.pdf$/i.test(name) && !/\.pdf$/i.test(meta(stream,'dc.source'))) { const format=await official(stream._links.format.href);if(format.mimetype!=='application/pdf')continue; }
  const description=meta(stream,'dc.description');
  const norm=clean(name+' '+description);
  const category=/consolidad|compilad/.test(norm)?'compilacao':/texto principal|original/.test(norm)?'original':/anexo/.test(norm)?'anexo':'nao_classificado';
