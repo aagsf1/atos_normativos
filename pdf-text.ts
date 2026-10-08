@@ -14,10 +14,10 @@ if(!/^https:\/\/bibliotecadigital\.trt16\.jus\.br\/server\/api\/core\/bitstreams
 const r=await fetch(f.url,{signal:AbortSignal.timeout(40000)});if(!r.ok)throw Error('Biblioteca HTTP '+r.status);
 const bytes=new Uint8Array(await r.arrayBuffer());if(bytes.length>15000000)throw Error('PDF exceeds 15 MB');
 const pdf=await getDocument({data:bytes,isEvalSupported:false,disableFontFace:true,useSystemFonts:false}).promise;
-let text='';for(let n=1;n<=pdf.numPages;n++){const page=await pdf.getPage(n);const data=await page.getTextContent();text+=data.items.map((i:any)=>i.str||'').join(' ')+'\n';page.cleanup();}
+let text='',needsOCR=false;for(let n=1;n<=pdf.numPages;n++){const page=await pdf.getPage(n);const data=await page.getTextContent();const pageText=data.items.map((i:any)=>i.str||'').join(' ');if(pageText.replace(/[^\p{L}\p{N}]/gu,'').length<40)needsOCR=true;text+=pageText+'\n';page.cleanup();}
 await pdf.destroy();
 const normalized=text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}_]+/gu,' ');
-const state=text.trim().length>=40?'concluido':'ocr_pendente';
+const state=!needsOCR && text.trim().length>=40?'concluido':'ocr_pendente';
 await rpc('trt16_pdf_save',{arquivo:f.id,lease:f.lease,conteudo:text,normalizado:normalized,estado:state});
 return Response.json({id:f.id,status:state,characters:text.length});
 }catch(e){const message=e instanceof Error?e.message:String(e);await rpc('trt16_pdf_save',{arquivo:f.id,lease:f.lease,conteudo:null,normalizado:null,estado:'erro',erro:message});return Response.json({id:f.id,error:message},{status:502});}
