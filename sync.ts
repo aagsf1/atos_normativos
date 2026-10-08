@@ -1,6 +1,6 @@
 // Coleta em lotes. Credenciais administrativas ficam somente no ambiente da Edge Function.
 const source = 'https://bibliotecadigital.trt16.jus.br';
-const scopes = ['fb1166f6-d480-41b0-a09b-26b7f63b2c55','0bd21984-5ce9-4b34-9040-052b857ad0c9'];
+const scopes = ['fb1166f6-d480-41b0-a09b-26b7f63b2c55','67365a54-3dca-485f-b876-9d2b44b00508'];
 const base = Deno.env.get('SUPABASE_URL')!;
 const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const headers = {apikey:key, Authorization:`Bearer ${key}`, 'Content-Type':'application/json'};
@@ -44,7 +44,7 @@ Deno.serve(async(req)=>{
  const match=title.match(/(\d+)\s*\/\s*(\d{4})/);
  const number=Number(meta(i,'local.identifier.number')||match?.[1]);
  const year=Number(meta(i,'local.identifier.year')||match?.[2]);
- if(!number||year!==claim.ano||i.withdrawn){ignored++;continue;}
+ if(!number||year!==claim.ano||i.withdrawn||(claim.colecao===0?!/^Portaria da Presid/i.test(title):!/^Resolu/i.test(title))){ignored++;continue;}
  const previous:any=known.get(i.uuid); if(previous?.modified===i.lastModified && previous.files>0)continue;
  const abstract=meta(i,'dc.description.abstract')||meta(i,'dc.description')||'Ementa não informada no catálogo oficial.';
  const author=meta(i,'dc.contributor.author')||null;
@@ -67,6 +67,7 @@ Deno.serve(async(req)=>{
  await Promise.all([work(),work(),work()]);
  let nextYear=claim.ano,nextCollection=claim.colecao,nextPage=claim.pagina+1;
  if(nextPage>=search.page.totalPages){nextPage=0;nextCollection++;if(nextCollection>1){nextCollection=0;nextYear--;}}
+ if(claim.retomar_ano!==null && nextYear===claim.retomar_ano && nextCollection===claim.retomar_colecao){nextPage=claim.retomar_pagina;}
  const done=nextYear<1989;
  await db('rpc/trt16_sync_save',{lote:atos,arquivos:files,claim_id:claim.lease_id,proximo_ano:nextYear,proxima_colecao:nextCollection,proxima_pagina:nextPage,terminou:done,ignorados_lote:ignored});
  return Response.json({updated:atos.length,pdfs:files.length,year:claim.ano,collection:claim.colecao,page:claim.pagina,done});
