@@ -72,11 +72,11 @@ grant execute on function public.trt16_sync_error(uuid,text) to service_role;
 
 create schema if not exists trt16_interno;
 revoke all on schema trt16_interno from public,anon,authenticated;
-create or replace function trt16_interno.dispatch()  returns void language plpgsql security invoker set search_path='' as $$
+create or replace function trt16_interno.dispatch() returns void language plpgsql security invoker set search_path='' as $$
 begin
  if exists(select 1 from public.trt16_sync where id=1 and ativo and (lease_until is null or lease_until<now())) then
  perform net.http_post(url:='https://itobvfemswylcawdydrz.supabase.co/functions/v1/trt16-sync',
- headers:=jsonb_build_object('Content-Type','application/json','x-sync-token',(select decrypted_secret from vault.decrypted_secrets where name='trt16_sync_token')),
+ headers:=jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||(select decrypted_secret from vault.decrypted_secrets where name='trt16_sync_anon_jwt'),'x-sync-token',(select decrypted_secret from vault.decrypted_secrets where name='trt16_sync_token')),
  body:='{}'::jsonb,timeout_milliseconds:=120000);
  end if;
 end $$;
@@ -87,3 +87,5 @@ select cron.schedule('trt16-diario','0 6 * * *',$cron$
  update public.trt16_sync set ano=extract(year from now())::int,colecao=0,pagina=0,ativo=true,lease_until=null,lease_id=null,falhas=0,inicio=now() where id=1 and not ativo;
  update public.trt16_base set estado='em_andamento' where id=1 and exists(select 1 from public.trt16_sync where id=1 and ativo);
 $cron$);
+
+-- Antes de instalar em outro projeto, criar no Vault trt16_sync_anon_jwt com a chave anon JWT.
