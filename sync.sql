@@ -38,7 +38,7 @@ end $$;
 revoke all on function public.trt16_sync_claim(text) from public,anon,authenticated;
 grant execute on function public.trt16_sync_claim(text) to service_role;
 
-create function public.trt16_sync_save(lote jsonb, arquivos jsonb, claim_id uuid, proximo_ano integer, proxima_colecao integer, proxima_pagina integer, terminou boolean, ignorados_lote integer)
+create or replace function public.trt16_sync_save(lote jsonb, arquivos jsonb, claim_id uuid, proximo_ano integer, proxima_colecao integer, proxima_pagina integer, terminou boolean, ignorados_lote integer)
 returns void language plpgsql security invoker set search_path='' as $$
 declare a jsonb; f jsonb; ato bigint; begin
  perform 1 from public.trt16_sync where id=1 and lease_id=claim_id and lease_until>now() for update;
@@ -54,6 +54,7 @@ declare a jsonb; f jsonb; ato bigint; begin
  values(ato,f->>'url',f->>'nome',f->>'categoria',f->>'descricao',(f->>'ordem')::int,current_date)
  on conflict(url) do update set ato_id=excluded.ato_id,nome=excluded.nome,categoria=excluded.categoria,descricao=excluded.descricao,ordem=excluded.ordem,coleta=excluded.coleta;
  end loop;
+ update public.trt16_atos a set pdf_url=(select f.url from public.trt16_arquivos f where f.ato_id=a.id order by case when f.categoria='original' then 0 else 1 end,f.ordem,f.id limit 1) where a.fonte_uuid in(select (value->>'fonte_uuid')::uuid from jsonb_array_elements(lote));
  update public.trt16_sync set ano=proximo_ano,colecao=proxima_colecao,pagina=proxima_pagina,ativo=not terminou,lease_until=null,lease_id=null,falhas=0,ultimo_erro=null,ignorados=ignorados+ignorados_lote where id=1;
  update public.trt16_base set ultima_atualizacao=case when jsonb_array_length(lote)>0 then now() else ultima_atualizacao end,
  ultima_coleta_completa=case when terminou then now() else ultima_coleta_completa end,
