@@ -1,0 +1,28 @@
+name: OCR dos PDFs do TRT16
+on:
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ocr-pdfs.yml'
+      - 'ocr-worker.py'
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: trt16-ocr
+  cancel-in-progress: false
+jobs:
+  ocr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar renderização e OCR em português
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-por
+      - name: Indexar textos dos PDFs digitalizados
+        run: python3 ocr-worker.py
