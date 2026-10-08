@@ -1,13 +1,17 @@
 create or replace function public.trt16_pesquisar_pagina(q text default '',tipo_filtro text default '',ano_filtro integer default null,numero_filtro integer default null,pagina_num integer default 1,tamanho_pagina integer default 25)
 returns jsonb language sql stable security invoker set search_path = '' as $$
  with grupos as (
- select parte,ordem from regexp_split_to_table(lower(left(coalesce(q,''),300)),'\mou\M') with ordinality as g(parte,ordem)
+ select parte,ordem from regexp_split_to_table(lower(left(coalesce(q,''),300)),'\me\M') with ordinality as g(parte,ordem)
+ ), alternativas as (
+ select ordem,trecho,alternativa from grupos cross join lateral regexp_split_to_table(parte,'\mou\M') with ordinality as o(trecho,alternativa)
+ ), frases as (
+ select ordem,alternativa,string_agg(quote_literal(token)||':*',' & ' order by posicao) as expressao
+ from alternativas cross join lateral regexp_split_to_table(regexp_replace(trecho,'[^[:alnum:]_]+',' ','g'),'\s+') with ordinality as p(token,posicao)
+ where token<>'' group by ordem,alternativa
  ), consultas_grupo as (
- select ordem,string_agg(quote_literal(token)||':*',' & ' order by posicao) as expressao
- from grupos cross join lateral regexp_split_to_table(regexp_replace(parte,'[^[:alnum:]_]+',' ','g'),'\s+') with ordinality as p(token,posicao)
- where token<>'' and token<>'e' group by ordem
+ select ordem,string_agg('('||expressao||')',' | ' order by alternativa) as expressao from frases group by ordem
  ), termos as (
- select to_tsquery('simple',string_agg('('||expressao||')',' | ' order by ordem)) as consulta from consultas_grupo
+ select to_tsquery('simple',string_agg('('||expressao||')',' & ' order by ordem)) as consulta from consultas_grupo
  ), filtrados as (
  select a.* from public.trt16_atos a cross join termos t
  where a.em_escopo and (t.consulta is null or to_tsvector('simple',regexp_replace(a.campo_busca,'[^[:alnum:]_]+',' ','g')) @@ t.consulta)
