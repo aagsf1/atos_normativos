@@ -5,7 +5,7 @@ returns jsonb language sql stable security invoker set search_path = '' as $$
  from regexp_split_to_table(regexp_replace(left(q,300),'[^[:alnum:]_]+',' ','g'),'\s+') as token where token<>''
  ), filtrados as (
  select a.* from public.trt16_atos a cross join termos t
- where a.em_escopo and (t.consulta is null or to_tsvector('simple',a.campo_busca) @@ t.consulta)
+ where a.em_escopo and (t.consulta is null or to_tsvector('simple',regexp_replace(a.campo_busca,'[^[:alnum:]_]+',' ','g')) @@ t.consulta)
  and (tipo_filtro='' or a.tipo=tipo_filtro)
  and (ano_filtro is null or a.ano=ano_filtro)
  and (numero_filtro is null or a.numero=numero_filtro)
