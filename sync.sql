@@ -46,17 +46,17 @@ declare a jsonb; f jsonb; ato bigint; begin
  for a in select value from jsonb_array_elements(lote) loop
  insert into public.trt16_atos(tipo,numero,ano,titulo,data_catalogo,autor,resumo,origem,coleta,campo_busca,fonte_uuid,fonte_modificado,pdf_url,pdf_observacao)
  values(a->>'tipo',(a->>'numero')::int,(a->>'ano')::int,a->>'titulo',nullif(a->>'data_catalogo','')::date,a->>'autor',a->>'resumo',a->>'origem',current_date,a->>'campo_busca',(a->>'fonte_uuid')::uuid,a->>'fonte_modificado',null,null)
- on conflict(tipo,numero,ano) do update set titulo=excluded.titulo,data_catalogo=excluded.data_catalogo,autor=excluded.autor,resumo=excluded.resumo,origem=excluded.origem,coleta=excluded.coleta,campo_busca=excluded.campo_busca,fonte_uuid=excluded.fonte_uuid,fonte_modificado=excluded.fonte_modificado;
+ on conflict(tipo,numero,ano) where em_escopo do update set titulo=excluded.titulo,data_catalogo=excluded.data_catalogo,autor=excluded.autor,resumo=excluded.resumo,origem=excluded.origem,coleta=excluded.coleta,campo_busca=excluded.campo_busca,fonte_uuid=excluded.fonte_uuid,fonte_modificado=excluded.fonte_modificado;
  end loop;
  for f in select value from jsonb_array_elements(arquivos) loop
- select id into ato from public.trt16_atos a where a.fonte_uuid=(f->>'fonte_uuid')::uuid or exists(select 1 from jsonb_array_elements(lote) j where j->>'fonte_uuid'=f->>'fonte_uuid' and a.tipo=j->>'tipo' and a.numero=(j->>'numero')::int and a.ano=(j->>'ano')::int) order by case when a.fonte_uuid=(f->>'fonte_uuid')::uuid then 0 else 1 end limit 1;
+ select id into ato from public.trt16_atos a where a.em_escopo and (a.fonte_uuid=(f->>'fonte_uuid')::uuid or exists(select 1 from jsonb_array_elements(lote) j where j->>'fonte_uuid'=f->>'fonte_uuid' and a.tipo=j->>'tipo' and a.numero=(j->>'numero')::int and a.ano=(j->>'ano')::int)) order by case when a.fonte_uuid=(f->>'fonte_uuid')::uuid then 0 else 1 end limit 1;
  if ato is null then raise exception 'Ato não encontrado para PDF: %',f->>'fonte_uuid'; end if;
  insert into public.trt16_arquivos(ato_id,url,nome,categoria,descricao,ordem,coleta)
  values(ato,f->>'url',f->>'nome',f->>'categoria',f->>'descricao',(f->>'ordem')::int,current_date)
  on conflict(url) do update set ato_id=excluded.ato_id,nome=excluded.nome,categoria=excluded.categoria,descricao=excluded.descricao,ordem=excluded.ordem,coleta=excluded.coleta;
  end loop;
  update public.trt16_atos a set pdf_url=(select f.url from public.trt16_arquivos f where f.ato_id=a.id order by case when f.categoria='original' then 0 else 1 end,f.ordem,f.id limit 1) where a.fonte_uuid in(select (value->>'fonte_uuid')::uuid from jsonb_array_elements(lote));
- update public.trt16_sync set ano=proximo_ano,colecao=proxima_colecao,pagina=proxima_pagina,ativo=not terminou,lease_until=null,lease_id=null,falhas=0,ultimo_erro=null,ignorados=ignorados+ignorados_lote where id=1;
+ update public.trt16_sync set ano=proximo_ano,colecao=proxima_colecao,pagina=proxima_pagina,ativo=not terminou,retomar_ano=case when proximo_ano=retomar_ano and proxima_colecao=retomar_colecao then null else retomar_ano end,retomar_pagina=case when proximo_ano=retomar_ano and proxima_colecao=retomar_colecao then null else retomar_pagina end,retomar_colecao=case when proximo_ano=retomar_ano and proxima_colecao=retomar_colecao then null else retomar_colecao end,lease_until=null,lease_id=null,falhas=0,ultimo_erro=null,ignorados=ignorados+ignorados_lote where id=1;
  update public.trt16_base set ultima_atualizacao=case when jsonb_array_length(lote)>0 then now() else ultima_atualizacao end,
  ultima_coleta_completa=case when terminou then now() else ultima_coleta_completa end,
  estado=case when terminou then 'concluida' else 'em_andamento' end,ano_em_coleta=case when terminou then null else proximo_ano end where id=1;
