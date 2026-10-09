@@ -1,18 +1,27 @@
+create or replace function public.trt16_consulta_termos(q text) returns tsquery language plpgsql immutable security invoker set search_path='' as $$
+declare token text; clean text; term text; alt text=''; grp text=''; allgroups text=''; begin
+q:=translate(lower(left(coalesce(q,''),300)),'“”','""');
+if (length(q)-length(replace(q,'"',''))) % 2 <> 0 then raise exception 'Feche as aspas da expressão pesquisada.' using errcode='22023'; end if;
+for token in select m[1] from regexp_matches(q,'"[^"]*"|[^[:space:]"]+','g') m loop
+if token in ('e','ou') then
+ if alt<>'' then grp:=concat_ws(' | ',nullif(grp,''),'('||alt||')');alt:='';end if;
+ if token='e' and grp<>'' then allgroups:=concat_ws(' & ',nullif(allgroups,''),'('||grp||')');grp:='';end if;
+else
+ clean:=regexp_replace(translate(token,'áàâãéêíóôõúüç','aaaaeeiooouuc'),'[^[:alnum:]_]+',' ','g');
+ if left(token,1)='"' then term:=nullif(phraseto_tsquery('simple',clean)::text,'');
+ else select string_agg(quote_literal(w)||':*',' & ') into term from regexp_split_to_table(trim(clean),'\s+') w where w<>''; end if;
+ if term is not null then alt:=concat_ws(' & ',nullif(alt,''),'('||term||')');end if;
+end if;
+end loop;
+if alt<>'' then grp:=concat_ws(' | ',nullif(grp,''),'('||alt||')');end if;
+if grp<>'' then allgroups:=concat_ws(' & ',nullif(allgroups,''),'('||grp||')');end if;
+return nullif(allgroups,'')::tsquery;end $$;
+revoke all on function public.trt16_consulta_termos(text) from public;
+grant execute on function public.trt16_consulta_termos(text) to anon,authenticated;
+
 create or replace function public.trt16_pesquisar_pagina(q text default '',tipo_filtro text default '',ano_filtro integer default null,numero_filtro integer default null,pagina_num integer default 1,tamanho_pagina integer default 25)
 returns jsonb language sql stable security invoker set search_path = '' as $$
- with grupos as (
- select parte,ordem from regexp_split_to_table(lower(left(coalesce(q,''),300)),'\me\M') with ordinality as g(parte,ordem)
- ), alternativas as (
- select ordem,trecho,alternativa from grupos cross join lateral regexp_split_to_table(parte,'\mou\M') with ordinality as o(trecho,alternativa)
- ), frases as (
- select ordem,alternativa,string_agg(quote_literal(token)||':*',' & ' order by posicao) as expressao
- from alternativas cross join lateral regexp_split_to_table(regexp_replace(trecho,'[^[:alnum:]_]+',' ','g'),'\s+') with ordinality as p(token,posicao)
- where token<>'' group by ordem,alternativa
- ), consultas_grupo as (
- select ordem,string_agg('('||expressao||')',' | ' order by alternativa) as expressao from frases group by ordem
- ), termos as (
- select to_tsquery('simple',string_agg('('||expressao||')',' & ' order by ordem)) as consulta from consultas_grupo
- ), filtrados as (
+ with termos as (select public.trt16_consulta_termos(q) as consulta), filtrados as (
  select a.* from public.trt16_atos a cross join termos t
  where a.em_escopo and (t.consulta is null or to_tsvector('simple',regexp_replace(a.campo_busca,'[^[:alnum:]_]+',' ','g')) @@ t.consulta or exists(select 1 from public.trt16_arquivos f where f.ato_id=a.id and f.texto_estado='concluido' and to_tsvector('simple',regexp_replace(a.campo_busca,'[^[:alnum:]_]+',' ','g')||' '||coalesce(f.texto_busca,'')) @@ t.consulta))
  and (tipo_filtro='' or a.tipo=tipo_filtro)
@@ -35,3 +44,5 @@ returns jsonb language sql stable security invoker set search_path = '' as $$
 $$;
 revoke all on function public.trt16_pesquisar_pagina(text,text,integer,integer,integer,integer) from public;
 grant execute on function public.trt16_pesquisar_pagina(text,text,integer,integer,integer,integer) to anon,authenticated;
+
+
