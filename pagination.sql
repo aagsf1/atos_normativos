@@ -39,6 +39,7 @@ returns jsonb language sql stable security invoker set search_path = '' as $$
  'pdfs_indexados',(select count(*) from public.trt16_arquivos f join public.trt16_atos a on a.id=f.ato_id where a.em_escopo and f.texto_estado='concluido'),
  'pdfs_total',(select count(*) from public.trt16_arquivos f join public.trt16_atos a on a.id=f.ato_id where a.em_escopo),
  'total',(select count(*) from public.trt16_atos where em_escopo),
+ 'quantidades_por_tipo',coalesce((select jsonb_agg(jsonb_build_object('tipo',tipo,'quantidade',quantidade) order by tipo) from (select tipo,count(*) quantidade from public.trt16_atos where em_escopo group by tipo) t),'[]'::jsonb),
  'base',(select to_jsonb(b)-'id' from public.trt16_base b where id=1),
  'anos',coalesce((select jsonb_agg(ano order by ano desc) from (select distinct ano from public.trt16_atos where em_escopo) y),'[]'::jsonb))
 $$;
