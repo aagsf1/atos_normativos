@@ -12,7 +12,7 @@ def processar(job):
     texto=job.get("texto") or ""
     metodo="texto_previamente_extraido"
     result=analisar(texto,job["cadastro"],job["categoria"],metodo)
-    if not texto or result["estado"]=="inconclusivo" and job["categoria"]=="original":
+    if job["categoria"]=="original" and (not texto or result["estado"]=="inconclusivo"):
         try:
             if not re.fullmatch(r"https://bibliotecadigital\.trt16\.jus\.br/server/api/core/bitstreams/[0-9a-f-]{36}/content",job["url"],re.I):
                 raise ValueError("URL não oficial")
