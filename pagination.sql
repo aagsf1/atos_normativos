@@ -28,7 +28,7 @@ returns jsonb language sql stable security invoker set search_path = '' as $$
  and (ano_filtro is null or a.ano=ano_filtro)
  and (numero_filtro is null or a.numero=numero_filtro)
  ), contagem as (select count(*) as n from filtrados), limites as (
- select case when tamanho_pagina in (25,50,75,100) then tamanho_pagina else 25 end as tamanho
+ select case when tamanho_pagina in (5,10,25,50,75,100) then tamanho_pagina else 25 end as tamanho
  ), paginacao as (
  select tamanho,greatest(1,least(greatest(1,coalesce(pagina_num,1)),greatest(1,ceil(n::numeric/tamanho)::int))) as atual,greatest(1,ceil(n::numeric/tamanho)::int) as paginas from limites cross join contagem
  ), pagina as (select * from filtrados order by ano desc,numero desc limit (select tamanho from paginacao) offset (select (atual-1)*tamanho from paginacao))
