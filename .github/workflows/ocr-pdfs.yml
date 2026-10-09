@@ -1,13 +1,6 @@
 name: OCR dos PDFs do TRT16
 on:
-  schedule:
-    - cron: '17,47 * * * *'
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/ocr-pdfs.yml'
-      - 'ocr-worker.py'
 permissions:
   contents: read
   id-token: write
