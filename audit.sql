@@ -35,9 +35,9 @@ end if;return new;end $$;
 revoke all on function public.trt16_preserva_correcao() from public,anon,authenticated;
 grant execute on function public.trt16_preserva_correcao() to service_role;
 create trigger trt16_identidade_protegida before insert or update on public.trt16_atos for each row execute function public.trt16_preserva_correcao();
-create function public.trt16_auditoria_claim() returns jsonb language plpgsql security invoker set search_path='' as $$
+create or replace function public.trt16_auditoria_claim() returns jsonb language plpgsql security invoker set search_path='' as $$
 declare i public.trt16_auditoria_itens;begin
-select * into i from public.trt16_auditoria_itens where estado='pendente' or (estado='processando' and lease_ate<now() and tentativas<3) order by (cadastro->>'ano')::int desc,id limit 1 for update skip locked;
+select x.* into i from public.trt16_auditoria_itens x join public.trt16_auditorias a on a.id=x.auditoria_id where a.estado='em_andamento' and (x.estado='pendente' or (x.estado='processando' and x.lease_ate<now() and x.tentativas<3)) order by (x.cadastro->>'ano')::int desc,(x.cadastro->>'numero')::int desc,x.id limit 1 for update of x skip locked;
 if i.id is null then return null;end if;
 update public.trt16_auditoria_itens set estado='processando',lease=gen_random_uuid(),lease_ate=now()+interval '15 minutes',tentativas=tentativas+1 where id=i.id returning * into i;
 return jsonb_build_object('id',i.id,'lease',i.lease,'cadastro',i.cadastro,'url',i.url,'categoria',i.categoria,'texto',(select left(texto_pdf,6000) from public.trt16_arquivos where id=i.arquivo_id),'metodo_texto',(select texto_metodo from public.trt16_arquivos where id=i.arquivo_id));end $$;
