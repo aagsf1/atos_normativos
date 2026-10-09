@@ -1,0 +1,26 @@
+name: Auditoria dos PDFs do TRT16
+on:
+  schedule:
+    - cron: '7,27,47 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/audit-pdfs.yml', 'audit-worker.py', 'audit_analyzer.py']
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: trt16-auditoria
+  cancel-in-progress: false
+jobs:
+  auditar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar leitura e OCR
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-por
+      - name: Auditar cabeçalhos sem importar novos atos
+        run: python3 audit-worker.py
