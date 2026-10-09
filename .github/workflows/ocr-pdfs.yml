@@ -1,6 +1,11 @@
 name: OCR dos PDFs do TRT16
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '*/20 * * * *'
+  push:
+    paths:
+      - '.github/workflows/ocr-pdfs.yml'
 permissions:
   contents: read
   id-token: write
@@ -12,10 +17,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Verificar janela autorizada
+        id: janela
+        run: |
+          python3 - <<'PY'
+          import datetime, os
+          from zoneinfo import ZoneInfo
+          d = datetime.datetime.now(ZoneInfo('America/Fortaleza'))
+          allowed = d.date() == datetime.date(2026,10,12) or d.weekday() >= 5 or d.hour < 7 or (d.hour,d.minute) >= (16,30)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('permitida='+str(allowed).lower()+'\n')
+          PY
       - uses: actions/checkout@v4
+        if: steps.janela.outputs.permitida == 'true'
       - name: Instalar renderização e OCR em português
+        if: steps.janela.outputs.permitida == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-por
       - name: Indexar textos dos PDFs digitalizados
+        if: steps.janela.outputs.permitida == 'true'
         run: python3 ocr-worker.py
