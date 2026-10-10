@@ -40,7 +40,15 @@ Deno.serve(async(req)=>{
  const atos:any[]=[],files:any[]=[];let ignored=0;
  let cursor=0;
  async function work(){while(cursor<items.length){const i=items[cursor++];
- const title=meta(i,'dc.title')||i.name;
+ try {
+ const suppliedTitle=meta(i,'dc.title')||i.name||'';
+ const catalogNumber=Number(meta(i,'local.identifier.number'));
+ const catalogYear=Number(meta(i,'local.identifier.year'));
+ const catalogType=clean(meta(i,'local.type.ato'));
+ const canRecover=!suppliedTitle && catalogNumber>0 && catalogYear===claim.ano && (claim.colecao===0?catalogType==='portaria':catalogType.startsWith('resolucao administrativa'));
+ const title=suppliedTitle||(canRecover?(claim.colecao===0?'Portaria da Presidência':'Resolução Administrativa')+' nº '+catalogNumber+'/'+catalogYear:'');
+ if(!title)throw Error('Título ausente e identidade insuficiente nos metadados oficiais');
+ if(canRecover)await db('rpc/trt16_registra_pendencia',{item_uuid:i.uuid,item_ano:claim.ano,item_colecao:claim.colecao,item_pagina:claim.pagina,item_titulo:title,item_motivo:'Título ausente na API; reconstruído a partir de tipo, número e ano oficiais.',item_estado:'resolvida'});
  const match=title.match(/(\d+)\s*\/\s*(\d{4})/);
  const number=Number(meta(i,'local.identifier.number')||match?.[1]);
  const year=Number(meta(i,'local.identifier.year')||match?.[2]);
@@ -63,6 +71,11 @@ Deno.serve(async(req)=>{
  }
  }
  atos.push({tipo:claim.colecao===0?'Portaria':'Resolução',numero:number,ano:year,titulo:title,data_catalogo:/^\d{4}-\d{2}-\d{2}$/.test(issued)?issued:null,autor:author,resumo:abstract,origem:source+'/entities/publication/'+i.uuid+'/full',campo_busca:clean(title+' '+(author||'')+' '+abstract),fonte_uuid:i.uuid,fonte_modificado:i.lastModified});files.push(...itemFiles);
+ } catch(itemError) {
+ const message=itemError instanceof Error?itemError.message:String(itemError);
+ await db('rpc/trt16_registra_pendencia',{item_uuid:i.uuid,item_ano:claim.ano,item_colecao:claim.colecao,item_pagina:claim.pagina,item_titulo:meta(i,'dc.title')||i.name||null,item_motivo:message,item_estado:'pendente'});
+ ignored++;
+ }
  }}
  await Promise.all([work(),work(),work()]);
  let nextYear=claim.ano,nextCollection=claim.colecao,nextPage=claim.pagina+1;
