@@ -10,6 +10,16 @@ A primeira versão do parser foi substituída após teste com citações de atos
 
 O workflow `.github/workflows/audit-pdfs.yml` executa lotes independentes na nuvem a cada 20 minutos, até 500 PDFs e aproximadamente 10 minutos de trabalho por lote. PDF inacessível ou ilegível é registrado para revisão. A função `trt16-audit` valida assinatura OIDC, emissor, audiência, IDs imutáveis do repositório e proprietário, branch main e caminho do workflow. Acesso aos RPCs e tabelas de auditoria é exclusivo do servidor. Nenhuma chave administrativa é enviada ao GitHub.
 
+## Recuperação de falhas de comunicação
+
+O worker faz no máximo três tentativas para obter autenticação e para gravar resultados após falhas transitórias de rede ou HTTP 408, 429, 500, 502, 503 e 504. Após HTTP 401, obtém uma nova credencial OIDC antes de repetir a operação. Falhas permanentes, como HTTP 400, não são repetidas. As esperas são limitadas a 1 e 2 segundos.
+
+A reserva (`claim`) não é repetida após uma resposta ambígua ou perda de conexão, pois o servidor pode já ter reservado um item. A fila existente permite retomar reservas vencidas, respeitando o limite de tentativas do servidor. Uma resposta de gravação sem confirmação (`saved: false`) continua sendo tratada como pendência, inclusive quando uma resposta anterior possa ter sido perdida; não se presume sucesso.
+
+Uma falha individual não descarta os resultados dos outros itens já reservados no lote. Após processá-los, o worker interrompe novas reservas e termina com erro se houver falhas técnicas pendentes. Isso evita consumir a fila durante indisponibilidade e mantém o alerta do GitHub Actions.
+
+O resumo do job e o artefato `audit-report-<run_id>-<attempt>` registram contagens confirmadas, IDs sem confirmação e tipo/status HTTP das falhas. O workflow tenta preservar o relatório mesmo se o worker falhar; a retenção é de 30 dias. Tokens, leases e corpos de resposta não integram o relatório. Resultados inconclusivos por falta de evidência permanecem separados das falhas técnicas de gravação. Os testes podem ser executados com `python3 -m unittest -v test_audit_worker.py`.
+
 ## Correções verificadas
 
 A tabela privada `trt16_correcoes_verificadas` reserva valores confirmados por revisão humana, com PDF, evidência, revisor e data. O trigger `trt16_identidade_protegida` aplica os valores protegidos em INSERT/UPDATE e grava tentativas divergentes em `trt16_conflitos_correcao`. O teste de proteção foi executado em transação revertida. Não existem correções verificadas aplicadas automaticamente pela auditoria.
@@ -25,3 +35,4 @@ where a.estado='em_andamento' group by i.estado;
 ```
 
 Relatório local parcial de 09/10/2026: 700 PDFs com texto disponível, 630 compatíveis automaticamente, 2 divergentes e 68 inconclusivos. O universo tem 20.546 atos e 21.561 PDFs, além de 2 atos sem PDF. Essas contagens parciais não constituem percentual de confiabilidade da base completa.
+

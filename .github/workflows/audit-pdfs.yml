@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/audit-pdfs.yml', 'audit-worker.py', 'audit_analyzer.py']
+    paths: ['.github/workflows/audit-pdfs.yml', 'audit-worker.py', 'audit_analyzer.py', 'test_audit_worker.py']
 permissions:
   contents: read
   id-token: write
@@ -18,9 +18,20 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Testar recuperação de falhas
+        run: python3 -m unittest -v test_audit_worker.py
       - name: Instalar leitura e OCR
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-por
       - name: Auditar cabeçalhos sem importar novos atos
         run: python3 audit-worker.py
+      - name: Preservar relatório e pendências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: audit-report/
+          if-no-files-found: ignore
+          retention-days: 30
+
